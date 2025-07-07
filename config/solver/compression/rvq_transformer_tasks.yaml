@@ -1,0 +1,39 @@
+# @package __global__
+
+defaults:
+  - compression/default
+  - auxiliary_tasks: default
+  - /model: encodec/past_transformer_encoder_1024_8
+  - override /dset: audio/default
+  - _self_
+
+solver: compression_asr_phone
+compression_model: past
+
+dataset:
+  return_info: True
+  segment_duration: 3
+  max_duration: null
+  sample_on_duration: True
+  batch_size: 80
+  evaluate:
+    segment_duration: 1
+  generate:
+    segment_duration: 10
+    num_samples: 32
+    batch_size: 8
+  augmentin_flip_phase: true
+
+schedule:
+  lr_scheduler: cosine
+  cosine:
+    warmup: 4000
+    lr_min_ratio: 0.0
+    cycle_length: 1.0
+
+
+channels: 1
+sample_rate: 16000
+
+wandb:
+  project: Semantic-Encodec

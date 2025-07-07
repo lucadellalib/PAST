@@ -1,0 +1,6 @@
+default:
+  dora_dir: /home/train_outputs/
+  partitions:
+    global: debug
+    team: debug
+  reference_dir: /tmp
