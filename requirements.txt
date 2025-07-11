@@ -1,7 +1,3 @@
 audiocraft
 torch
 torchaudio
-speechbrain
-numpy
-pandas
-jiwer
