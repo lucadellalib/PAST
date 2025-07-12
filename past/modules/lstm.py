@@ -6,10 +6,18 @@ class StreamableLSTM(nn.Module):
     Expects input as convolutional layout.
     """
 
-    def __init__(self, dimension: int, num_layers: int = 2, skip: bool = True, bidirectional: bool = False):
+    def __init__(
+        self,
+        dimension: int,
+        num_layers: int = 2,
+        skip: bool = True,
+        bidirectional: bool = False,
+    ):
         super().__init__()
         self.skip = skip
-        self.lstm = nn.LSTM(dimension, dimension, num_layers, bidirectional=bidirectional)
+        self.lstm = nn.LSTM(
+            dimension, dimension, num_layers, bidirectional=bidirectional
+        )
         self.bidirectional = bidirectional
         self.projection = nn.Linear(2 * dimension, dimension) if bidirectional else None
 

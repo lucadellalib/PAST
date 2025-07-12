@@ -1,11 +1,54 @@
 import math
 import typing as tp
-
-import torch
 from dataclasses import dataclass, field
 
-from audiocraft.quantization.base import BaseQuantizer, QuantizedResult
+import torch
+
 from past.quantization.core_vq import ResidualVectorQuantization
+
+
+@dataclass
+class QuantizedResult:
+    x: torch.Tensor
+    codes: torch.Tensor
+    bandwidth: torch.Tensor  # bandwidth in kb/s used, per batch item.
+    penalty: tp.Optional[torch.Tensor] = None
+    metrics: dict = field(default_factory=dict)
+
+
+class BaseQuantizer(torch.nn.Module):
+    """Base class for quantizers."""
+
+    def forward(self, x: torch.Tensor, frame_rate: int) -> QuantizedResult:
+        """
+        Given input tensor x, returns first the quantized (or approximately quantized)
+        representation along with quantized codes, bandwidth, and any penalty term for the loss.
+        Finally, this returns a dict of metrics to update logging etc.
+        Frame rate must be passed so that the bandwidth is properly computed.
+        """
+        raise NotImplementedError()
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        """Encode a given input tensor with the specified sample rate at the given bandwidth."""
+        raise NotImplementedError()
+
+    def decode(self, codes: torch.Tensor) -> torch.Tensor:
+        """Decode the given codes to the quantized representation."""
+        raise NotImplementedError()
+
+    @property
+    def total_codebooks(self):
+        """Total number of codebooks."""
+        raise NotImplementedError()
+
+    @property
+    def num_codebooks(self):
+        """Number of active codebooks."""
+        raise NotImplementedError()
+
+    def set_num_codebooks(self, n: int):
+        """Set the number of active codebooks."""
+        raise NotImplementedError()
 
 
 @dataclass
@@ -89,7 +132,14 @@ class ResidualVectorQuantizer(BaseQuantizer):
         codes = codes.transpose(0, 1)
         # codes is [B, K, T], with T frames, K nb of codebooks.
         bw = torch.tensor(n_q * bw_per_q).to(x)
-        return QuantizedResultCentroid(quantized, codes, bw, penalty=torch.mean(commit_loss), rvq_centroid=out_quantized, embedding=x)
+        return QuantizedResultCentroid(
+            quantized,
+            codes,
+            bw,
+            penalty=torch.mean(commit_loss),
+            rvq_centroid=out_quantized,
+            embedding=x,
+        )
 
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """Encode a given input tensor with the specified frame rate at the given bandwidth.

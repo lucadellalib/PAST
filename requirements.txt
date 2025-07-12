@@ -1,3 +1,5 @@
-audiocraft
+einops
+omegaconf
 torch
 torchaudio
+transformers

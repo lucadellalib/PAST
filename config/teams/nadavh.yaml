@@ -1,6 +1,0 @@
-default:
-  dora_dir: /worxpace/thsis/my_audiocraft/train_outputs
-  partitions:
-    global: debug
-    team: debug
-  reference_dir: /tmp

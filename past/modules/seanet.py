@@ -3,9 +3,9 @@ import typing as tp
 import numpy as np
 import torch.nn as nn
 
-from audiocraft.modules.conv import StreamableConv1d, StreamableConvTranspose1d
-from past.modules.lstm import StreamableLSTM
+from past.modules.conv import StreamableConv1d, StreamableConvTranspose1d
 from past.modules.embedding_transformer import EmbeddingTransformer
+from past.modules.lstm import StreamableLSTM
 
 
 class SEANetResnetBlock(nn.Module):
@@ -31,17 +31,19 @@ class SEANetResnetBlock(nn.Module):
         dim: int,
         kernel_sizes: tp.List[int] = [3, 1],
         dilations: tp.List[int] = [1, 1],
-        activation: str = 'ELU',
-        activation_params: dict = {'alpha': 1.0},
-        norm: str = 'none',
+        activation: str = "ELU",
+        activation_params: dict = {"alpha": 1.0},
+        norm: str = "none",
         norm_params: tp.Dict[str, tp.Any] = {},
         causal: bool = False,
-        pad_mode: str = 'reflect',
+        pad_mode: str = "reflect",
         compress: int = 2,
         true_skip: bool = True,
     ):
         super().__init__()
-        assert len(kernel_sizes) == len(dilations), 'Number of kernel sizes should match number of dilations'
+        assert len(kernel_sizes) == len(
+            dilations
+        ), "Number of kernel sizes should match number of dilations"
         act = getattr(nn, activation)
         hidden = dim // compress
         block = []
@@ -50,14 +52,31 @@ class SEANetResnetBlock(nn.Module):
             out_chs = dim if i == len(kernel_sizes) - 1 else hidden
             block += [
                 act(**activation_params),
-                StreamableConv1d(in_chs, out_chs, kernel_size=kernel_size, dilation=dilation, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode),
+                StreamableConv1d(
+                    in_chs,
+                    out_chs,
+                    kernel_size=kernel_size,
+                    dilation=dilation,
+                    norm=norm,
+                    norm_kwargs=norm_params,
+                    causal=causal,
+                    pad_mode=pad_mode,
+                ),
             ]
         self.block = nn.Sequential(*block)
         self.shortcut: nn.Module
         if true_skip:
             self.shortcut = nn.Identity()
         else:
-            self.shortcut = StreamableConv1d(dim, dim, kernel_size=1, norm=norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode)
+            self.shortcut = StreamableConv1d(
+                dim,
+                dim,
+                kernel_size=1,
+                norm=norm,
+                norm_kwargs=norm_params,
+                causal=causal,
+                pad_mode=pad_mode,
+            )
 
     def forward(self, x):
         return self.shortcut(x) + self.block(x)
@@ -100,16 +119,16 @@ class SEANetEncoder(nn.Module):
         n_filters: int = 32,
         n_residual_layers: int = 3,
         ratios: tp.List[int] = [8, 5, 4, 2],
-        activation: str = 'ELU',
-        activation_params: dict = {'alpha': 1.0},
-        norm: str = 'none',
+        activation: str = "ELU",
+        activation_params: dict = {"alpha": 1.0},
+        norm: str = "none",
         norm_params: tp.Dict[str, tp.Any] = {},
         kernel_size: int = 7,
         last_kernel_size: int = 7,
         residual_kernel_size: tp.Union[int, tp.List[int]] = 3,
         dilation_base: int = 2,
         causal: bool = False,
-        pad_mode: str = 'reflect',
+        pad_mode: str = "reflect",
         true_skip: bool = True,
         compress: int = 2,
         lstm: int = 0,
@@ -123,27 +142,43 @@ class SEANetEncoder(nn.Module):
         self.dimension = dimension
         self.n_filters = n_filters
         self.ratios = list(reversed(ratios))
-        residual_kernel_sizes = [residual_kernel_size] * len(self.ratios) if isinstance(residual_kernel_size, int) else residual_kernel_size
-        assert len(residual_kernel_sizes) == len(self.ratios), "Number of residual kernel sizes should match number of downsampling ratios"
+        residual_kernel_sizes = (
+            [residual_kernel_size] * len(self.ratios)
+            if isinstance(residual_kernel_size, int)
+            else residual_kernel_size
+        )
+        assert len(residual_kernel_sizes) == len(
+            self.ratios
+        ), "Number of residual kernel sizes should match number of downsampling ratios"
         del ratios
         self.n_residual_layers = n_residual_layers
         self.hop_length = np.prod(self.ratios)
         self.n_blocks = len(self.ratios) + 2  # first and last conv + residual blocks
         self.disable_norm_outer_blocks = disable_norm_outer_blocks
-        assert self.disable_norm_outer_blocks >= 0 and self.disable_norm_outer_blocks <= self.n_blocks, (
-            "Number of blocks for which to disable norm is invalid." "It should be lower or equal to the actual number of blocks in the network and greater or equal to 0."
+        assert (
+            self.disable_norm_outer_blocks >= 0
+            and self.disable_norm_outer_blocks <= self.n_blocks
+        ), (
+            "Number of blocks for which to disable norm is invalid."
+            "It should be lower or equal to the actual number of blocks in the network and greater or equal to 0."
         )
 
         act = getattr(nn, activation)
         mult = 1
         model: tp.List[nn.Module] = [
             StreamableConv1d(
-                channels, mult * n_filters, kernel_size, norm='none' if self.disable_norm_outer_blocks >= 1 else norm, norm_kwargs=norm_params, causal=causal, pad_mode=pad_mode
+                channels,
+                mult * n_filters,
+                kernel_size,
+                norm="none" if self.disable_norm_outer_blocks >= 1 else norm,
+                norm_kwargs=norm_params,
+                causal=causal,
+                pad_mode=pad_mode,
             )
         ]
         # Downsample to raw audio scale
         for i, ratio in enumerate(self.ratios):
-            block_norm = 'none' if self.disable_norm_outer_blocks >= i + 2 else norm
+            block_norm = "none" if self.disable_norm_outer_blocks >= i + 2 else norm
             # Add residual layers
             for j in range(n_residual_layers):
                 model += [
@@ -179,7 +214,11 @@ class SEANetEncoder(nn.Module):
             mult *= inflating_factor
 
         if lstm:
-            model += [StreamableLSTM(mult * n_filters, num_layers=lstm, bidirectional=lstm_bidirectional)]
+            model += [
+                StreamableLSTM(
+                    mult * n_filters, num_layers=lstm, bidirectional=lstm_bidirectional
+                )
+            ]
 
         model += [
             act(**activation_params),
@@ -187,7 +226,9 @@ class SEANetEncoder(nn.Module):
                 mult * n_filters,
                 dimension,
                 last_kernel_size,
-                norm='none' if self.disable_norm_outer_blocks == self.n_blocks else norm,
+                norm=(
+                    "none" if self.disable_norm_outer_blocks == self.n_blocks else norm
+                ),
                 norm_kwargs=norm_params,
                 causal=causal,
                 pad_mode=pad_mode,
@@ -195,7 +236,11 @@ class SEANetEncoder(nn.Module):
         ]
 
         self.model = nn.Sequential(*model)
-        self.encoder_transformer = EmbeddingTransformer(**transformer_params) if transformer_params is not None else None
+        self.encoder_transformer = (
+            EmbeddingTransformer(**transformer_params)
+            if transformer_params is not None
+            else None
+        )
 
     def forward(self, x):
         x = self.model(x)
@@ -243,18 +288,18 @@ class SEANetDecoder(nn.Module):
         n_filters: int = 32,
         n_residual_layers: int = 3,
         ratios: tp.List[int] = [8, 5, 4, 2],
-        activation: str = 'ELU',
-        activation_params: dict = {'alpha': 1.0},
+        activation: str = "ELU",
+        activation_params: dict = {"alpha": 1.0},
         final_activation: tp.Optional[str] = None,
         final_activation_params: tp.Optional[dict] = None,
-        norm: str = 'none',
+        norm: str = "none",
         norm_params: tp.Dict[str, tp.Any] = {},
         kernel_size: int = 7,
         last_kernel_size: int = 7,
         residual_kernel_size: tp.Union[int, tp.List[int]] = 3,
         dilation_base: int = 2,
         causal: bool = False,
-        pad_mode: str = 'reflect',
+        pad_mode: str = "reflect",
         true_skip: bool = True,
         compress: int = 2,
         lstm: int = 0,
@@ -269,28 +314,42 @@ class SEANetDecoder(nn.Module):
         self.channels = channels
         self.n_filters = n_filters
         self.ratios = ratios
-        residual_kernel_sizes = [residual_kernel_size] * len(self.ratios) if isinstance(residual_kernel_size, int) else residual_kernel_size
+        residual_kernel_sizes = (
+            [residual_kernel_size] * len(self.ratios)
+            if isinstance(residual_kernel_size, int)
+            else residual_kernel_size
+        )
         del ratios
         self.n_residual_layers = n_residual_layers
         self.hop_length = np.prod(self.ratios)
         self.n_blocks = len(self.ratios) + 2  # first and last conv + residual blocks
         self.disable_norm_outer_blocks = disable_norm_outer_blocks
-        assert self.disable_norm_outer_blocks >= 0 and self.disable_norm_outer_blocks <= self.n_blocks, (
-            "Number of blocks for which to disable norm is invalid." "It should be lower or equal to the actual number of blocks in the network and greater or equal to 0."
+        assert (
+            self.disable_norm_outer_blocks >= 0
+            and self.disable_norm_outer_blocks <= self.n_blocks
+        ), (
+            "Number of blocks for which to disable norm is invalid."
+            "It should be lower or equal to the actual number of blocks in the network and greater or equal to 0."
         )
 
         act = getattr(nn, activation)
         mult = int(inflating_factor ** len(self.ratios))
         model: tp.List[nn.Module] = []
 
-        self.decoder_transformer = EmbeddingTransformer(**transformer_params) if transformer_params is not None else None
+        self.decoder_transformer = (
+            EmbeddingTransformer(**transformer_params)
+            if transformer_params is not None
+            else None
+        )
 
         model += [
             StreamableConv1d(
                 dimension,
                 mult * n_filters,
                 kernel_size,
-                norm='none' if self.disable_norm_outer_blocks == self.n_blocks else norm,
+                norm=(
+                    "none" if self.disable_norm_outer_blocks == self.n_blocks else norm
+                ),
                 norm_kwargs=norm_params,
                 causal=causal,
                 pad_mode=pad_mode,
@@ -298,11 +357,19 @@ class SEANetDecoder(nn.Module):
         ]
 
         if lstm:
-            model += [StreamableLSTM(mult * n_filters, num_layers=lstm, bidirectional=lstm_bidirectional)]
+            model += [
+                StreamableLSTM(
+                    mult * n_filters, num_layers=lstm, bidirectional=lstm_bidirectional
+                )
+            ]
 
         # Upsample to raw audio scale
         for i, ratio in enumerate(self.ratios):
-            block_norm = 'none' if self.disable_norm_outer_blocks >= self.n_blocks - (i + 1) else norm
+            block_norm = (
+                "none"
+                if self.disable_norm_outer_blocks >= self.n_blocks - (i + 1)
+                else norm
+            )
             # Add upsampling layers
             model += [
                 act(**activation_params),
@@ -344,7 +411,7 @@ class SEANetDecoder(nn.Module):
                 n_filters,
                 channels,
                 last_kernel_size,
-                norm='none' if self.disable_norm_outer_blocks >= 1 else norm,
+                norm="none" if self.disable_norm_outer_blocks >= 1 else norm,
                 norm_kwargs=norm_params,
                 causal=causal,
                 pad_mode=pad_mode,
