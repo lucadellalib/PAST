@@ -64,7 +64,7 @@ class PastModel(EncodecModel):
         assert (
             checkpoint_path is not None and Path(checkpoint_path).exists()
         ), f"Checkpoint not found: {checkpoint_path}"
-        state = torch.load(checkpoint_path, map_location="cpu")
+        state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         assert (
             state is not None and "xp.cfg" in state
         ), f"Could not load compression model from ckpt: {checkpoint_path}"
